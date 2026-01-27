@@ -6,16 +6,6 @@ Database: PostgreSQL
 Infrastructure: Docker, Docker Compose
 Tooling: Make, dotenv
 
-├── backend/        # Django backend (API, business logic)
-├── frontend/       # Vite frontend (UI)
-├── data/           # Sample data, fixtures, or datasets
-├── infra/          # Infrastructure-related files (scripts, configs)
-├── docker-compose.yml
-├── .env.example
-├── Makefile
-├── README.md
-└── .gitignore
-
 **Quickstart**
 # Clone the repo
 git clone <repo-url>
