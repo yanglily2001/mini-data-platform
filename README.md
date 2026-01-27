@@ -11,6 +11,7 @@ Infrastructure: Docker, Docker Compose
 Tooling: Make, dotenv
 
 **Structure**
+
 .
 ├── backend/        # Django backend (API, business logic)
 
