@@ -41,8 +41,7 @@ cd data-platform
 cp .env.example .env
 
 # Build and start services
-docker compose up --build
-Then open:
+docker compose up --build, then open:
 
 Frontend → http://localhost:5173
 Backend API → http://localhost:8000
