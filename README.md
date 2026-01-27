@@ -32,30 +32,30 @@ Tooling: Make, dotenv
 └── .gitignore
 
 
-**Quickstart**
-# Clone the repo
+# Quickstart
+**Clone the repo**
 git clone <repo-url>
 cd data-platform
 
-# Create env file
+**Create env file**
 cp .env.example .env
 
-# Build and start services
+**Build and start services**
 docker compose up --build, then open:
 
 Frontend → http://localhost:5173
 Backend API → http://localhost:8000
 Admin (if enabled) → http://localhost:8000/admin
 
-**Docker Commands**
-# Start services
+# Docker Commands
+**Start services**
 docker compose up
 
-# Stop services
+**Stop services**
 docker compose down
 
-# Rebuild containers
+**Rebuild containers**
 docker compose up --build
 
-# Reset database
+**Reset database**
 docker compose down -v
