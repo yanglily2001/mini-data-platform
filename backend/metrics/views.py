@@ -1,4 +1,3 @@
-cat > metrics/views.py <<'EOF'
 import csv
 import io
 from datetime import datetime
