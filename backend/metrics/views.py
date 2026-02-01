@@ -138,3 +138,99 @@ def import_csv(request):
         }
     )
 
+from django.db.models import Count, Min, Max, Q
+
+
+def _null_count(qs, field_name: str) -> int:
+    # Counts NULLs. (Not counting empty strings; add that if station_id can be "")
+    return qs.filter(**{f"{field_name}__isnull": True}).count()
+
+
+def _duplicate_rows_count(qs) -> int:
+    """
+    Count *extra* duplicate rows by natural key (station_id, date).
+    Example: if a key appears 3 times, that's 2 duplicates.
+    """
+    dup_groups = (
+        qs.values("station_id", "date")
+        .annotate(n=Count("id"))
+        .filter(n__gt=1)
+    )
+
+    # Sum (n - 1) across duplicate groups:
+    return sum(g["n"] - 1 for g in dup_groups)
+
+
+def _out_of_range_counts(qs) -> dict:
+    """
+    Mirrors your import validation:
+      temp_c must be between -90 and 60 inclusive
+      precip_mm must be >= 0
+    Counts exclude NULLs so that "null" and "out-of-range" aren't double-counted.
+    """
+    return {
+        "temp_c_lt_-90": qs.filter(temp_c__isnull=False, temp_c__lt=-90.0).count(),
+        "temp_c_gt_60": qs.filter(temp_c__isnull=False, temp_c__gt=60.0).count(),
+        "precip_mm_lt_0": qs.filter(precip_mm__isnull=False, precip_mm__lt=0.0).count(),
+    }
+
+
+def quality_report_for_queryset(qs, *, fields_for_nulls: list[str]) -> dict:
+    total = qs.count()
+
+    # Null counts + null rates
+    null_counts = {f: _null_count(qs, f) for f in fields_for_nulls}
+    null_rates = {
+        f: (null_counts[f] / total if total else 0.0)
+        for f in fields_for_nulls
+    }
+
+    # Min/max numeric
+    agg = qs.aggregate(
+        temp_c_min=Min("temp_c"),
+        temp_c_max=Max("temp_c"),
+        precip_mm_min=Min("precip_mm"),
+        precip_mm_max=Max("precip_mm"),
+    )
+
+    duplicates_extra_rows = _duplicate_rows_count(qs)
+    out_of_range = _out_of_range_counts(qs)
+
+    return {
+        "total_rows": total,
+        "null_counts": null_counts,
+        "null_rates": null_rates,
+        "duplicates": {
+            "key": ["station_id", "date"],
+            "extra_duplicate_rows": duplicates_extra_rows,
+        },
+        "min_max": {
+            "temp_c": {"min": agg["temp_c_min"], "max": agg["temp_c_max"]},
+            "precip_mm": {"min": agg["precip_mm_min"], "max": agg["precip_mm_max"]},
+        },
+        "out_of_range_counts": out_of_range,
+    }
+
+
+def quality_report(request):
+    """
+    GET /api/quality/?table=measurements|staging
+    Defaults to measurements.
+    """
+    from .models import Measurement, StagingMeasurement
+
+    table = (request.GET.get("table") or "measurements").strip().lower()
+    if table not in ("measurements", "staging"):
+        return JsonResponse({"error": "table must be 'measurements' or 'staging'."}, status=400)
+
+    if table == "staging":
+        qs = StagingMeasurement.objects.all()
+    else:
+        qs = Measurement.objects.all()
+
+    data = quality_report_for_queryset(
+        qs,
+        fields_for_nulls=["date", "station_id", "temp_c", "precip_mm"],
+    )
+    data["table"] = table
+    return JsonResponse(data)
