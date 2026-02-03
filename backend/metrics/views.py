@@ -4,11 +4,17 @@ from datetime import datetime
 
 from django.db import transaction
 from django.http import JsonResponse
+from django.db.models import Avg, Sum
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET
 
 from .models import Measurement, StagingMeasurement
 
+TEMP_MIN_C = -60.0
+TEMP_MAX_C = 60.0
+PRECIP_MIN_MM = 0.0
+PRECIP_MAX_MM = 500.0
 
 def _parse_date(value: str):
     if value is None:
@@ -34,18 +40,31 @@ def _parse_float(value: str):
         return None
 
 
-def _is_valid_row(date, station_id, temp_c, precip_mm):
-    # Basic validation rules (adjust as needed)
-    if date is None:
-        return False
-    if station_id is None or station_id.strip() == "":
-        return False
-    if temp_c is None or not (-90.0 <= temp_c <= 60.0):
-        return False
-    if precip_mm is None or precip_mm < 0.0:
-        return False
-    return True
+def _validate_row(date, station_id, temp_c, precip_mm):
+    """
+    Returns (is_valid: bool, errors: list[str])
+    """
+    errors = []
 
+    if date is None:
+        errors.append("invalid_date")
+
+    if station_id is None or station_id.strip() == "":
+        errors.append("missing_station_id")
+
+    if temp_c is None:
+        errors.append("invalid_temp_c")
+    else:
+        if temp_c < TEMP_MIN_C or temp_c > TEMP_MAX_C:
+            errors.append("temp_c_out_of_range")
+
+    if precip_mm is None:
+        errors.append("invalid_precip_mm")
+    else:
+        if precip_mm < PRECIP_MIN_MM or precip_mm > PRECIP_MAX_MM:
+            errors.append("precip_mm_out_of_range")
+
+    return (len(errors) == 0, errors)
 
 @csrf_exempt
 @require_POST
@@ -78,27 +97,36 @@ def import_csv(request):
         )
 
     rows_in_file = 0
+    rows_valid = 0
+    rows_invalid = 0
+    
     staging_rows = []
     valid_clean_rows = []
-
+    
     for raw in reader:
         rows_in_file += 1
-
+    
         date = _parse_date(raw.get("date"))
         station_id = (raw.get("station_id") or "").strip() or None
         temp_c = _parse_float(raw.get("temp_c"))
         precip_mm = _parse_float(raw.get("precip_mm"))
-
+    
+        is_valid, errors = _validate_row(date, station_id, temp_c, precip_mm)
+    
+        # Always store row in staging (even invalid) — "load into staging" ✅
+        # If your StagingMeasurement model has no error field, just ignore `errors`.
         staging_rows.append(
             StagingMeasurement(
                 date=date,
                 station_id=station_id,
                 temp_c=temp_c,
                 precip_mm=precip_mm,
+                # If you add a field like validation_errors, you can store: ",".join(errors)
             )
         )
-
-        if _is_valid_row(date, station_id, temp_c, precip_mm):
+    
+        if is_valid:
+            rows_valid += 1
             valid_clean_rows.append(
                 Measurement(
                     date=date,
@@ -107,39 +135,40 @@ def import_csv(request):
                     precip_mm=precip_mm,
                 )
             )
-
-    rows_valid = len(valid_clean_rows)
-    rows_invalid = rows_in_file - rows_valid
-
-    with transaction.atomic():
-        # clear staging each import (simple approach)
-        StagingMeasurement.objects.all().delete()
-
-        if staging_rows:
-            StagingMeasurement.objects.bulk_create(staging_rows, batch_size=2000)
-
-        rows_upserted = 0
-        if valid_clean_rows:
-            Measurement.objects.bulk_create(
-                valid_clean_rows,
-                batch_size=2000,
-                update_conflicts=True,
-                unique_fields=["station_id", "date"],
-                update_fields=["temp_c", "precip_mm"],
-            )
-            rows_upserted = len(valid_clean_rows)
-
-    return JsonResponse(
-        {
-            "rows_in_file": rows_in_file,
-            "rows_valid": rows_valid,
-            "rows_invalid": rows_invalid,
-            "rows_upserted": rows_upserted,
-        }
-    )
+        else:
+            rows_invalid += 1
+    
+        rows_valid = len(valid_clean_rows)
+        rows_invalid = rows_in_file - rows_valid
+    
+        with transaction.atomic():
+            # clear staging each import (simple approach)
+            StagingMeasurement.objects.all().delete()
+    
+            if staging_rows:
+                StagingMeasurement.objects.bulk_create(staging_rows, batch_size=2000)
+    
+            rows_upserted = 0
+            if valid_clean_rows:
+                Measurement.objects.bulk_create(
+                    valid_clean_rows,
+                    batch_size=2000,
+                    update_conflicts=True,
+                    unique_fields=["station_id", "date"],
+                    update_fields=["temp_c", "precip_mm"],
+                )
+                rows_upserted = len(valid_clean_rows)
+    
+        return JsonResponse(
+            {
+                "rows_in_file": rows_in_file,
+                "rows_valid": rows_valid,
+                "rows_invalid": rows_invalid,
+                "rows_upserted": rows_upserted,
+            }
+        )
 
 from django.db.models import Count, Min, Max, Q
-
 
 def _null_count(qs, field_name: str) -> int:
     # Counts NULLs. (Not counting empty strings; add that if station_id can be "")
@@ -234,3 +263,96 @@ def quality_report(request):
     )
     data["table"] = table
     return JsonResponse(data)
+
+@require_GET
+def daily_metrics(request):
+    station_id = (request.GET.get("station_id") or "").strip()
+    if not station_id:
+        return JsonResponse({"error": "Missing required query param: station_id"}, status=400)
+
+    qs = (
+        Measurement.objects
+        .filter(station_id=station_id)
+        .order_by("date")
+        .values("date", "temp_c", "precip_mm")
+    )
+
+    # Convert date objects to ISO strings for JSON/charting
+    data = [
+        {
+            "date": row["date"].isoformat() if row["date"] else None,
+            "temp_c": row["temp_c"],
+            "precip_mm": row["precip_mm"],
+        }
+        for row in qs
+    ]
+
+    return JsonResponse(
+        {
+            "station_id": station_id,
+            "count": len(data),
+            "data": data,
+        }
+    )
+
+def _parse_iso_date(value: str):
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@require_GET
+def metrics_summary(request):
+    """
+    GET /api/metrics/summary/?station_id=X&from=YYYY-MM-DD&to=YYYY-MM-DD
+
+    Returns:
+      {
+        "station_id": "X",
+        "from": "YYYY-MM-DD",
+        "to": "YYYY-MM-DD",
+        "days": <count_of_rows>,
+        "avg_temp_c": <float_or_null>,
+        "total_precip_mm": <float_or_null>
+      }
+    """
+    station_id = (request.GET.get("station_id") or "").strip()
+    date_from = _parse_iso_date(request.GET.get("from"))
+    date_to = _parse_iso_date(request.GET.get("to"))
+
+    if not station_id:
+        return JsonResponse({"error": "Missing required query param: station_id"}, status=400)
+    if date_from is None:
+        return JsonResponse({"error": "Missing or invalid required query param: from (YYYY-MM-DD)"}, status=400)
+    if date_to is None:
+        return JsonResponse({"error": "Missing or invalid required query param: to (YYYY-MM-DD)"}, status=400)
+    if date_from > date_to:
+        return JsonResponse({"error": "'from' must be <= 'to'."}, status=400)
+
+    qs = Measurement.objects.filter(
+        station_id=station_id,
+        date__gte=date_from,
+        date__lte=date_to,
+    )
+
+    agg = qs.aggregate(
+        avg_temp_c=Avg("temp_c"),
+        total_precip_mm=Sum("precip_mm"),
+    )
+
+    return JsonResponse(
+        {
+            "station_id": station_id,
+            "from": date_from.isoformat(),
+            "to": date_to.isoformat(),
+            "days": qs.count(),
+            "avg_temp_c": agg["avg_temp_c"],
+            "total_precip_mm": agg["total_precip_mm"],
+        }
+    )

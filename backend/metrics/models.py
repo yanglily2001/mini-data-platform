@@ -26,30 +26,14 @@ class StagingMeasurement(models.Model):
 
 
 class Measurement(models.Model):
-    """
-    Clean fact table. Only validated rows get inserted/upserted here.
-    Idempotency is enforced by unique (station_id, date).
-    """
-    date = models.DateField()
     station_id = models.CharField(max_length=64)
-
-    temp_c = models.FloatField()
-    precip_mm = models.FloatField()
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    date = models.DateField()
+    temp_c = models.FloatField(null=True, blank=True)
+    precip_mm = models.FloatField(null=True, blank=True)
 
     class Meta:
-        db_table = "measurements"
         constraints = [
-            models.UniqueConstraint(
-                fields=["station_id", "date"],
-                name="uniq_measurements_station_date",
-            )
-        ]
-        indexes = [
-            models.Index(fields=["station_id", "date"]),
-            models.Index(fields=["date"]),
+            models.UniqueConstraint(fields=["station_id", "date"], name="uniq_station_date")
         ]
 
     def __str__(self) -> str:
