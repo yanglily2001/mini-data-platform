@@ -23,6 +23,7 @@ from metrics.views import quality_report
 from metrics.views import daily_metrics
 from metrics.views import daily_metrics
 from metrics.views import metrics_summary
+from metrics.views import stations
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -31,5 +32,6 @@ urlpatterns = [
     path("api/quality/", quality_report),
     path("api/metrics/daily/", daily_metrics),
     path("api/metrics/summary/", metrics_summary),
+    path("api/stations/", stations),
 ]
 
