@@ -8,6 +8,8 @@ from django.db.models import Avg, Sum
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
 
 from .models import Measurement, StagingMeasurement
 
@@ -306,6 +308,15 @@ def _parse_iso_date(value: str):
     except ValueError:
         return None
 
+@require_GET
+def stations(request):
+    qs = (
+        Measurement.objects
+        .values_list("station_id", flat=True)
+        .distinct()
+        .order_by("station_id")
+    )
+    return JsonResponse({"stations": list(qs)})
 
 @require_GET
 def metrics_summary(request):
