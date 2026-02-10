@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -117,6 +118,55 @@ function Stat({ label, value }) {
     <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
       <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{value ?? "-"}</div>
+    </div>
+  );
+}
+
+export function StationSelector({ value, onChange }) {
+  const [stations, setStations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStations() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await fetch("/api/stations/");
+        if (!res.ok) throw new Error(`Failed to load stations (${res.status})`);
+
+        const data = await res.json();
+        if (!cancelled) setStations(data.stations ?? []);
+      } catch (e) {
+        if (!cancelled) setError(e?.message ?? "Failed to load stations");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadStations();
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12 }}>
+      <label style={{ fontWeight: 600 }}>Station</label>
+
+      {loading ? (
+        <span>Loading…</span>
+      ) : error ? (
+        <span style={{ color: "crimson" }}>❌ {error}</span>
+      ) : (
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">-- Select a station --</option>
+          {stations.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
