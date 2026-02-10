@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { StationSelector } from "./StationSelector";
+
 import { useEffect, useState } from "react";
 
 export default function Dashboard() {
@@ -6,6 +8,8 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [stationId, setStationId] = useState("");
+  const [dailyData, setDailyData] = useState([]);
 
   const fileName = useMemo(() => selectedFile?.name ?? "", [selectedFile]);
 
@@ -19,7 +23,6 @@ export default function Dashboard() {
       return;
     }
 
-    // Optional guardrails ✅
     if (!f.name.toLowerCase().endsWith(".csv")) {
       setSelectedFile(null);
       setError("Please select a .csv file.");
@@ -39,12 +42,10 @@ export default function Dashboard() {
     }
 
     const form = new FormData();
-    form.append("file", selectedFile); // MUST match backend: request.FILES.get("file")
+    form.append("file", selectedFile); // MUST match backend key: request.FILES.get("file")
 
     try {
       setUploading(true);
-
-      // If you have Vite proxy, this works:
       const resp = await fetch("/api/import/", {
         method: "POST",
         body: form,
@@ -67,33 +68,110 @@ export default function Dashboard() {
     }
   }
 
+  useEffect(() => {
+    if (!stationId) {
+      setDailyData([]);
+      return;
+  }
+
+  fetch(`/api/metrics/daily/?station_id=${encodeURIComponent(stationId)}`)
+  .then(async (r) => {
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  })
+  .then((data) => setDailyData(data.data ?? []))
+  .catch((e) => {
+    console.error("Failed to load daily metrics:", e);
+    setDailyData([]);
+  });
+
+
   return (
     <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 900 }}>
       <h1>Dashboard</h1>
 
-      <section style={{ marginTop: 16, padding: 16, border: "1px solid #ddd", borderRadius: 12 }}>
+      <StationSelector value={stationId} onChange={setStationId} />
+
+       {stationId ? (
+        <div style={{ marginTop: 16 }}>
+          <h2>Daily metrics 📈</h2>
+          <pre
+            style={{
+              background: "#f7f7f7",
+              padding: 12,
+              borderRadius: 8,
+              overflowX: "auto",
+            }}
+          >
+            {JSON.stringify(dailyData, null, 2)}
+          </pre>
+        </div>
+      ) : (
+        <div style={{ marginTop: 16, opacity: 0.7 }}>
+          Select a station to load daily metrics 👆
+        </div>
+      )}
+
+      {/* ======================
+          CSV upload section
+         ====================== */}
+      <section
+        style={{
+          marginTop: 24,
+          padding: 16,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+        }}
+      >
         <h2 style={{ marginTop: 0 }}>Upload CSV 📤</h2>
 
-        <input type="file" accept=".csv,text/csv" onChange={onFileChange} />
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={onFileChange}
+        />
 
-        <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center" }}>
-          <button onClick={uploadCsv} disabled={uploading || !selectedFile}>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <button
+            onClick={uploadCsv}
+            disabled={uploading || !selectedFile}
+          >
             {uploading ? "Uploading..." : "Upload"}
           </button>
 
-          {fileName ? <span>Selected: <strong>{fileName}</strong></span> : <span>No file selected</span>}
+          {fileName ? (
+            <span>
+              Selected: <strong>{fileName}</strong>
+            </span>
+          ) : (
+            <span>No file selected</span>
+          )}
         </div>
 
-        {error ? (
+        {error && (
           <div style={{ marginTop: 12, color: "crimson" }}>
             ❌ {error}
           </div>
-        ) : null}
+        )}
 
-        {result ? (
+        {result && (
           <div style={{ marginTop: 16 }}>
-            <h3>Import Result ✅</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            <h3>Import Result</h3>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
               <Stat label="Rows in file" value={result.rows_in_file} />
               <Stat label="Rows valid" value={result.rows_valid} />
               <Stat label="Rows invalid" value={result.rows_invalid} />
@@ -102,12 +180,19 @@ export default function Dashboard() {
 
             <details style={{ marginTop: 12 }}>
               <summary>Raw JSON</summary>
-              <pre style={{ background: "#f7f7f7", padding: 12, borderRadius: 8, overflowX: "auto" }}>
+              <pre
+                style={{
+                  background: "#f7f7f7",
+                  padding: 12,
+                  borderRadius: 8,
+                  overflowX: "auto",
+                }}
+              >
                 {JSON.stringify(result, null, 2)}
               </pre>
             </details>
           </div>
-        ) : null}
+        )}
       </section>
     </div>
   );
@@ -115,9 +200,17 @@ export default function Dashboard() {
 
 function Stat({ label, value }) {
   return (
-    <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
+    <div
+      style={{
+        padding: 12,
+        border: "1px solid #eee",
+        borderRadius: 12,
+      }}
+    >
       <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value ?? "-"}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>
+        {value ?? "-"}
+      </div>
     </div>
   );
 }
