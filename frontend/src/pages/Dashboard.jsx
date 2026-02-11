@@ -69,28 +69,25 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    if (!stationId) {
-      setDailyData([]);
-      return;
-  }
-
-  fetch(`/api/metrics/daily/?station_id=${encodeURIComponent(stationId)}`)
-  .then(async (r) => {
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
-  })
-  .then((data) => setDailyData(data.data ?? []))
-  .catch((e) => {
-    console.error("Failed to load daily metrics:", e);
-    setDailyData([]);
-  });
-
-  useEffect(() => {
   if (!stationId) {
+    setDailyData([]);
     setSummary(null);
     return;
   }
 
+  // Daily metrics
+  fetch(`/api/metrics/daily/?station_id=${encodeURIComponent(stationId)}`)
+    .then(async (r) => {
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    })
+    .then((data) => setDailyData(data.data ?? []))
+    .catch((e) => {
+      console.error("Failed to load daily metrics:", e);
+      setDailyData([]);
+    });
+
+  // Summary metrics
   fetch(`/api/metrics/summary/?station_id=${encodeURIComponent(stationId)}`)
     .then(async (r) => {
       if (!r.ok) throw new Error(await r.text());
@@ -98,9 +95,10 @@ export default function Dashboard() {
     })
     .then((data) => setSummary(data))
     .catch((e) => {
-      console.error("Failed to load summary metrics:", e);
+      console.error("Failed to load summary:", e);
       setSummary(null);
     });
+
 }, [stationId]);
 
   return (
