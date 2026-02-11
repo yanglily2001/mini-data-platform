@@ -4,7 +4,7 @@ from datetime import datetime
 
 from django.db import transaction
 from django.http import JsonResponse
-from django.db.models import Avg, Sum
+from django.db.models import Avg, Sum, Count
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
@@ -257,50 +257,34 @@ def stations(request):
 
 @require_GET
 def metrics_summary(request):
-    """
-    GET /api/metrics/summary/?station_id=X&from=YYYY-MM-DD&to=YYYY-MM-DD
-
-    Returns:
-      {
-        "station_id": "X",
-        "from": "YYYY-MM-DD",
-        "to": "YYYY-MM-DD",
-        "days": <count_of_rows>,
-        "avg_temp_c": <float_or_null>,
-        "total_precip_mm": <float_or_null>
-      }
-    """
     station_id = (request.GET.get("station_id") or "").strip()
     date_from = _parse_iso_date(request.GET.get("from"))
     date_to = _parse_iso_date(request.GET.get("to"))
 
     if not station_id:
         return JsonResponse({"error": "Missing required query param: station_id"}, status=400)
-    if date_from is None:
-        return JsonResponse({"error": "Missing or invalid required query param: from (YYYY-MM-DD)"}, status=400)
-    if date_to is None:
-        return JsonResponse({"error": "Missing or invalid required query param: to (YYYY-MM-DD)"}, status=400)
-    if date_from > date_to:
-        return JsonResponse({"error": "'from' must be <= 'to'."}, status=400)
 
-    qs = Measurement.objects.filter(
-        station_id=station_id,
-        date__gte=date_from,
-        date__lte=date_to,
-    )
+    qs = Measurement.objects.filter(station_id=station_id)
+
+    if date_from:
+        qs = qs.filter(date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__lte=date_to)
 
     agg = qs.aggregate(
         avg_temp_c=Avg("temp_c"),
         total_precip_mm=Sum("precip_mm"),
+        total_rows=Count("id"),
     )
 
     return JsonResponse(
         {
             "station_id": station_id,
-            "from": date_from.isoformat(),
-            "to": date_to.isoformat(),
-            "days": qs.count(),
-            "avg_temp_c": agg["avg_temp_c"],
-            "total_precip_mm": agg["total_precip_mm"],
+            "from": date_from.isoformat() if date_from else None,
+            "to": date_to.isoformat() if date_to else None,
+            "total_rows": agg["total_rows"] or 0,
+            "avg_temp_c": float(agg["avg_temp_c"]) if agg["avg_temp_c"] is not None else None,
+            "total_precip_mm": float(agg["total_precip_mm"]) if agg["total_precip_mm"] is not None else 0.0,
         }
     )
+
