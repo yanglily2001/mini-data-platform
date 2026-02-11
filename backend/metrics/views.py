@@ -76,7 +76,13 @@ def import_csv(request):
 
     for raw in reader:
         rows_in_file += 1
-        ... parse + validate ...
+        date = _parse_date(raw.get("date"))
+        station_id = (raw.get("station_id") or "").strip() or None
+        temp_c = _parse_float(raw.get("temp_c"))
+        precip_mm = _parse_float(raw.get("precip_mm"))
+        
+        is_valid, errors = _validate_row(date, station_id, temp_c, precip_mm)
+
         staging_rows.append(StagingMeasurement(...))
         if is_valid:
             valid_clean_rows.append(Measurement(...))
