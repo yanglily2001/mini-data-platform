@@ -1,8 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { StationSelector } from "./StationSelector";
 
-import { useEffect, useState } from "react";
-
 export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
