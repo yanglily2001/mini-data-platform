@@ -257,12 +257,38 @@ def stations(request):
 
 @require_GET
 def metrics_summary(request):
+    """
+    GET /api/metrics/summary/?station_id=X&from=YYYY-MM-DD&to=YYYY-MM-DD
+
+    - station_id required
+    - from/to optional
+    - If from/to omitted, computes over ALL dates for that station
+
+    Returns:
+      {
+        "station_id": "X",
+        "from": "YYYY-MM-DD" | null,
+        "to": "YYYY-MM-DD" | null,
+        "total_rows": <int>,
+        "avg_temp_c": <float|null>,
+        "total_precip_mm": <float>
+      }
+    """
     station_id = (request.GET.get("station_id") or "").strip()
     date_from = _parse_iso_date(request.GET.get("from"))
     date_to = _parse_iso_date(request.GET.get("to"))
 
     if not station_id:
         return JsonResponse({"error": "Missing required query param: station_id"}, status=400)
+
+    # If user provided from/to but parsing failed, tell them
+    if request.GET.get("from") and date_from is None:
+        return JsonResponse({"error": "Invalid 'from' date. Use YYYY-MM-DD"}, status=400)
+    if request.GET.get("to") and date_to is None:
+        return JsonResponse({"error": "Invalid 'to' date. Use YYYY-MM-DD"}, status=400)
+
+    if date_from and date_to and date_from > date_to:
+        return JsonResponse({"error": "'from' must be <= 'to'."}, status=400)
 
     qs = Measurement.objects.filter(station_id=station_id)
 
@@ -272,19 +298,23 @@ def metrics_summary(request):
         qs = qs.filter(date__lte=date_to)
 
     agg = qs.aggregate(
+        total_rows=Count("id"),
         avg_temp_c=Avg("temp_c"),
         total_precip_mm=Sum("precip_mm"),
-        total_rows=Count("id"),
     )
+
+    total_rows = agg["total_rows"] or 0
+    avg_temp_c = agg["avg_temp_c"]
+    total_precip_mm = agg["total_precip_mm"]
 
     return JsonResponse(
         {
             "station_id": station_id,
             "from": date_from.isoformat() if date_from else None,
             "to": date_to.isoformat() if date_to else None,
-            "total_rows": agg["total_rows"] or 0,
-            "avg_temp_c": float(agg["avg_temp_c"]) if agg["avg_temp_c"] is not None else None,
-            "total_precip_mm": float(agg["total_precip_mm"]) if agg["total_precip_mm"] is not None else 0.0,
+            "total_rows": total_rows,
+            "avg_temp_c": float(avg_temp_c) if avg_temp_c is not None else None,
+            "total_precip_mm": float(total_precip_mm) if total_precip_mm is not None else 0.0,
         }
     )
 
