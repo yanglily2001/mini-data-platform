@@ -85,6 +85,23 @@ export default function Dashboard() {
     setDailyData([]);
   });
 
+  useEffect(() => {
+  if (!stationId) {
+    setSummary(null);
+    return;
+  }
+
+  fetch(`/api/metrics/summary/?station_id=${encodeURIComponent(stationId)}`)
+    .then(async (r) => {
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    })
+    .then((data) => setSummary(data))
+    .catch((e) => {
+      console.error("Failed to load summary metrics:", e);
+      setSummary(null);
+    });
+}, [stationId]);
 
   return (
     <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 900 }}>
@@ -111,6 +128,31 @@ export default function Dashboard() {
           Select a station to load daily metrics 👆
         </div>
       )}
+
+      {stationId ? (
+        <section style={{ marginTop: 16 }}>
+          <h2 style={{ marginBottom: 8 }}>Summary metrics 🧮</h2>
+      
+          {summary ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+              <Stat
+                label="Avg temp (°C)"
+                value={summary.avg_temp_c != null ? summary.avg_temp_c.toFixed(2) : "-"}
+              />
+              <Stat
+                label="Total precip (mm)"
+                value={summary.total_precip_mm != null ? summary.total_precip_mm.toFixed(2) : "0.00"}
+              />
+              <Stat
+                label="Total rows"
+                value={summary.total_rows ?? 0}
+              />
+            </div>
+          ) : (
+            <div style={{ opacity: 0.7 }}>Loading summary… ⏳</div>
+          )}
+        </section>
+      ) : null}
 
       {/* ======================
           CSV upload section
