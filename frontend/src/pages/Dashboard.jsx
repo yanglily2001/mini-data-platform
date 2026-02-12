@@ -77,7 +77,6 @@ export default function Dashboard() {
       .then((r) => r.json())
       .then((data) => setSummary(data))
       .catch(() => setSummary(null));
-
   }, [stationId]);
 
   return (
@@ -87,7 +86,7 @@ export default function Dashboard() {
       <StationSelector value={stationId} onChange={setStationId} />
 
       {summary && (
-        <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
           <Stat label="Average Temp (°C)" value={summary.avg_temp_c} />
           <Stat label="Total Precip (mm)" value={summary.total_precip_mm} />
           <Stat label="Total Rows" value={summary.total_rows} />
@@ -97,9 +96,39 @@ export default function Dashboard() {
       {stationId && (
         <div style={{ marginTop: 16 }}>
           <h2>Daily metrics 📈</h2>
-          <pre style={{ background: "#f7f7f7", padding: 12, borderRadius: 8 }}>
-            {JSON.stringify(dailyData, null, 2)}
-          </pre>
+
+          {dailyData.length === 0 ? (
+            <div style={{ opacity: 0.7 }}>No daily rows for this station.</div>
+          ) : (
+            <div style={{ marginTop: 12, overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  border: "1px solid #ddd",
+                  borderRadius: 12,
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f5f5f5" }}>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Temp (°C)</th>
+                    <th style={thStyle}>Precip (mm)</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {dailyData.map((row, idx) => (
+                    <tr key={row.date ?? idx} style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
+                      <td style={tdStyle}>{row.date ?? "-"}</td>
+                      <td style={tdStyle}>{row.temp_c ?? "-"}</td>
+                      <td style={tdStyle}>{row.precip_mm ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -113,13 +142,17 @@ export default function Dashboard() {
             {uploading ? "Uploading..." : "Upload"}
           </button>
 
-          {fileName && <span>Selected: <strong>{fileName}</strong></span>}
+          {fileName && (
+            <span>
+              Selected: <strong>{fileName}</strong>
+            </span>
+          )}
         </div>
 
         {error && <div style={{ marginTop: 12, color: "crimson" }}>❌ {error}</div>}
 
         {result && (
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
             <Stat label="Rows in file" value={result.rows_in_file} />
             <Stat label="Rows valid" value={result.rows_valid} />
             <Stat label="Rows invalid" value={result.rows_invalid} />
@@ -133,9 +166,22 @@ export default function Dashboard() {
 
 function Stat({ label, value }) {
   return (
-    <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
+    <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12, minWidth: 160 }}>
       <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{value ?? "-"}</div>
     </div>
   );
 }
+
+const thStyle = {
+  padding: 10,
+  borderBottom: "1px solid #ddd",
+  textAlign: "left",
+  fontWeight: 600,
+};
+
+const tdStyle = {
+  padding: 10,
+  borderBottom: "1px solid #eee",
+};
+
