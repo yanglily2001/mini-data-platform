@@ -1,5 +1,15 @@
 import { useMemo, useState, useEffect } from "react";
 import { StationSelector } from "./StationSelector";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 
 export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -9,6 +19,11 @@ export default function Dashboard() {
   const [stationId, setStationId] = useState("");
   const [dailyData, setDailyData] = useState([]);
   const [summary, setSummary] = useState(null);
+  const chartData = dailyData.map((r) => ({
+    ...r,
+    temp_c: r.temp_c == null ? null : Number(r.temp_c),
+    precip_mm: r.precip_mm == null ? null : Number(r.precip_mm),
+  }));
 
   const fileName = useMemo(() => selectedFile?.name ?? "", [selectedFile]);
 
@@ -94,8 +109,38 @@ export default function Dashboard() {
       )}
 
       {stationId && (
-        <div style={{ marginTop: 16 }}>
-          <h2>Daily metrics 📈</h2>
+        <div style={{ marginTop: 24 }}>
+          <h2>Daily Metrics 📈</h2>
+      
+          {dailyData.length === 0 ? (
+            <div style={{ opacity: 0.7 }}>No data available.</div>
+          ) : (
+            <div style={{ width: "100%", height: 300 }}>
+              <ResponsiveContainer>
+                <LineChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="temp_c"
+                    name="Temp (°C)"
+                    stroke="#ff7300"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="precip_mm"
+                    name="Precip (mm)"
+                    stroke="#387908"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
           {dailyData.length === 0 ? (
             <div style={{ opacity: 0.7 }}>No daily rows for this station.</div>
