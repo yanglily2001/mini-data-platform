@@ -85,8 +85,14 @@ export default function Dashboard() {
 
     fetch(`/api/metrics/daily/?station_id=${encodeURIComponent(stationId)}`)
       .then((r) => r.json())
-      .then((data) => setDailyData(data.data ?? []))
-      .catch(() => setDailyData([]));
+      .then((data) => {
+        console.log("daily metrics response:", data); // 👈
+        setDailyData(data.data ?? []);
+      })
+      .catch((e) => {
+        console.error("daily metrics fetch failed:", e);
+        setDailyData([]);
+      });
 
     fetch(`/api/metrics/summary/?station_id=${encodeURIComponent(stationId)}`)
       .then((r) => r.json())
