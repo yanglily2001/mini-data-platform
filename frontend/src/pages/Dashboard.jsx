@@ -115,39 +115,28 @@ export default function Dashboard() {
       )}
 
       {stationId && (
-        <div style={{ marginTop: 24 }}>
-          <h2>Daily Metrics 📊</h2>
+        <div style={{ marginTop: 16 }}>
+          <h2>Daily metrics 📈</h2>
       
           {dailyData.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>No data available.</div>
+            <div style={{ opacity: 0.7 }}>No daily data for this station yet.</div>
           ) : (
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                marginTop: 12,
-              }}
-            >
-              <thead>
-                <tr style={{ background: "#f3f3f3" }}>
-                  <th style={cellHeader}>Date</th>
-                  <th style={cellHeader}>Temp (°C)</th>
-                  <th style={cellHeader}>Precip (mm)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyData.map((row) => (
-                  <tr key={row.date}>
-                    <td style={cell}>{row.date}</td>
-                    <td style={cell}>{row.temp_c}</td>
-                    <td style={cell}>{row.precip_mm}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ width: "100%", height: 320, border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
+              <ResponsiveContainer>
+                <LineChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="temp_c" />
+                  <Line type="monotone" dataKey="precip_mm" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
       )}
+
 
       <section style={{ marginTop: 24, padding: 16, border: "1px solid #ddd", borderRadius: 12 }}>
         <h2>Upload CSV 📤</h2>
