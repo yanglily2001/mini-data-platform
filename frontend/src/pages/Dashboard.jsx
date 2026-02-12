@@ -110,69 +110,35 @@ export default function Dashboard() {
 
       {stationId && (
         <div style={{ marginTop: 24 }}>
-          <h2>Daily Metrics 📈</h2>
+          <h2>Daily Metrics 📊</h2>
       
           {dailyData.length === 0 ? (
             <div style={{ opacity: 0.7 }}>No data available.</div>
           ) : (
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="temp_c"
-                    name="Temp (°C)"
-                    stroke="#ff7300"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="precip_mm"
-                    name="Precip (mm)"
-                    stroke="#387908"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      )}
-
-          {dailyData.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>No daily rows for this station.</div>
-          ) : (
-            <div style={{ marginTop: 12, overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  border: "1px solid #ddd",
-                  borderRadius: 12,
-                }}
-              >
-                <thead>
-                  <tr style={{ background: "#f5f5f5" }}>
-                    <th style={thStyle}>Date</th>
-                    <th style={thStyle}>Temp (°C)</th>
-                    <th style={thStyle}>Precip (mm)</th>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                marginTop: 12,
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f3f3f3" }}>
+                  <th style={cellHeader}>Date</th>
+                  <th style={cellHeader}>Temp (°C)</th>
+                  <th style={cellHeader}>Precip (mm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyData.map((row) => (
+                  <tr key={row.date}>
+                    <td style={cell}>{row.date}</td>
+                    <td style={cell}>{row.temp_c}</td>
+                    <td style={cell}>{row.precip_mm}</td>
                   </tr>
-                </thead>
-
-                <tbody>
-                  {dailyData.map((row, idx) => (
-                    <tr key={row.date ?? idx} style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
-                      <td style={tdStyle}>{row.date ?? "-"}</td>
-                      <td style={tdStyle}>{row.temp_c ?? "-"}</td>
-                      <td style={tdStyle}>{row.precip_mm ?? "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}
@@ -217,6 +183,17 @@ function Stat({ label, value }) {
     </div>
   );
 }
+
+const cellHeader = {
+  padding: "8px",
+  border: "1px solid #ddd",
+  textAlign: "left",
+};
+
+const cell = {
+  padding: "8px",
+  border: "1px solid #ddd",
+};
 
 const thStyle = {
   padding: 10,
