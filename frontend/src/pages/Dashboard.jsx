@@ -101,64 +101,59 @@ export default function Dashboard() {
   }, [stationId]);
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 900 }}>
+    <div className="container">
       <h1>Dashboard</h1>
-
+  
       <StationSelector value={stationId} onChange={setStationId} />
-
+  
       {summary && (
-        <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
+        <div className="card-grid section">
           <Stat label="Average Temp (°C)" value={summary.avg_temp_c} />
           <Stat label="Total Precip (mm)" value={summary.total_precip_mm} />
           <Stat label="Total Rows" value={summary.total_rows} />
         </div>
       )}
-
+  
       {stationId && (
-        <div style={{ marginTop: 16 }}>
-          <h2>Daily metrics 📈</h2>
-      
-          {dailyData.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>No daily data for this station yet.</div>
-          ) : (
-            <div style={{ width: "100%", height: 320, border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-              <ResponsiveContainer>
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="temp_c" />
-                  <Line type="monotone" dataKey="precip_mm" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+        <div className="section">
+          <h2>Daily Metrics</h2>
+  
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Temp (°C)</th>
+                <th>Precip (mm)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailyData.map((row, i) => (
+                <tr key={i}>
+                  <td>{row.date}</td>
+                  <td>{row.temp_c}</td>
+                  <td>{row.precip_mm}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-
-
-      <section style={{ marginTop: 24, padding: 16, border: "1px solid #ddd", borderRadius: 12 }}>
-        <h2>Upload CSV 📤</h2>
-
+  
+      <section className="section">
+        <h2>Upload CSV</h2>
+  
         <input type="file" accept=".csv,text/csv" onChange={onFileChange} />
-
-        <div style={{ marginTop: 12, display: "flex", gap: 12 }}>
+  
+        <div style={{ marginTop: 12 }}>
           <button onClick={uploadCsv} disabled={uploading || !selectedFile}>
             {uploading ? "Uploading..." : "Upload"}
           </button>
-
-          {fileName && (
-            <span>
-              Selected: <strong>{fileName}</strong>
-            </span>
-          )}
         </div>
-
-        {error && <div style={{ marginTop: 12, color: "crimson" }}>❌ {error}</div>}
-
+  
+        {error && <div className="error">❌ {error}</div>}
+  
         {result && (
-          <div style={{ marginTop: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div className="card-grid section">
             <Stat label="Rows in file" value={result.rows_in_file} />
             <Stat label="Rows valid" value={result.rows_valid} />
             <Stat label="Rows invalid" value={result.rows_invalid} />
@@ -168,13 +163,12 @@ export default function Dashboard() {
       </section>
     </div>
   );
-}
 
 function Stat({ label, value }) {
   return (
-    <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12, minWidth: 160 }}>
-      <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value ?? "-"}</div>
+    <div className="card">
+      <div className="card-label">{label}</div>
+      <div className="card-value">{value ?? "-"}</div>
     </div>
   );
 }
