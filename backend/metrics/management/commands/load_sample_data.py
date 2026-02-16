@@ -31,7 +31,7 @@ class Command(BaseCommand):
             # This command runs with cwd=backend typically; but be safe:
             # <repo>/backend/metrics/management/commands/load_sample_data.py -> parents[4] is <repo>/backend
             backend_dir = Path(__file__).resolve().parents[4]
-            csv_path = backend_dir / "data" / "sample.csv"
+            csv_path = backend_dir / "backend" / "data" / "sample.csv"
 
         if not csv_path.exists():
             self.stderr.write(self.style.ERROR(f"CSV not found: {csv_path}"))
