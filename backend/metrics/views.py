@@ -69,29 +69,68 @@ def _validate_row(date, station_id, temp_c, precip_mm):
 @csrf_exempt
 @require_POST
 def import_csv(request):
-    ...
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return JsonResponse({"error": "Missing file field 'file'."}, status=400)
+
+    try:
+        text = uploaded.read().decode("utf-8-sig")  # handles BOM too
+    except UnicodeDecodeError:
+        return JsonResponse({"error": "File must be UTF-8 encoded CSV."}, status=400)
+
+    reader = csv.DictReader(io.StringIO(text))
+    required_cols = {"date", "station_id", "temp_c", "precip_mm"}
+    if reader.fieldnames is None or not required_cols.issubset(set(reader.fieldnames)):
+        return JsonResponse(
+            {
+                "error": "CSV must include columns: date, station_id, temp_c, precip_mm",
+                "found": reader.fieldnames,
+            },
+            status=400,
+        )
+
     rows_in_file = 0
     staging_rows = []
     valid_clean_rows = []
 
     for raw in reader:
         rows_in_file += 1
+
         date = _parse_date(raw.get("date"))
         station_id = (raw.get("station_id") or "").strip() or None
         temp_c = _parse_float(raw.get("temp_c"))
         precip_mm = _parse_float(raw.get("precip_mm"))
-        
-        is_valid, errors = _validate_row(date, station_id, temp_c, precip_mm)
 
-        staging_rows.append(StagingMeasurement(...))
+        is_valid, _errors = _validate_row(date, station_id, temp_c, precip_mm)
+
+        # Always store row in staging (even invalid)
+        staging_rows.append(
+            StagingMeasurement(
+                date=date,
+                station_id=station_id,
+                temp_c=temp_c,
+                precip_mm=precip_mm,
+            )
+        )
+
+        # Only valid rows go to measurements
         if is_valid:
-            valid_clean_rows.append(Measurement(...))
+            valid_clean_rows.append(
+                Measurement(
+                    date=date,
+                    station_id=station_id,
+                    temp_c=temp_c,
+                    precip_mm=precip_mm,
+                )
+            )
 
     rows_valid = len(valid_clean_rows)
     rows_invalid = rows_in_file - rows_valid
 
     with transaction.atomic():
+        # Truncate staging each import (idempotent)
         StagingMeasurement.objects.all().delete()
+
         if staging_rows:
             StagingMeasurement.objects.bulk_create(staging_rows, batch_size=2000)
 
@@ -106,12 +145,14 @@ def import_csv(request):
             )
             rows_upserted = len(valid_clean_rows)
 
-    return JsonResponse({
-        "rows_in_file": rows_in_file,
-        "rows_valid": rows_valid,
-        "rows_invalid": rows_invalid,
-        "rows_upserted": rows_upserted,
-    })
+    return JsonResponse(
+        {
+            "rows_in_file": rows_in_file,
+            "rows_valid": rows_valid,
+            "rows_invalid": rows_invalid,
+            "rows_upserted": rows_upserted,
+        }
+    )
     
 from django.db.models import Count, Min, Max, Q
 
