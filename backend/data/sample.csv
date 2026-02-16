@@ -1,0 +1,5 @@
+date,station_id,temp_c,precip_mm
+2026-01-01,STATION_A,12.3,0
+2026-01-02,STATION_A,13.1,1.2
+2026-01-03,STATION_B,5.4,0.5
+2026-01-04,STATION_B,-2.0,3.0
