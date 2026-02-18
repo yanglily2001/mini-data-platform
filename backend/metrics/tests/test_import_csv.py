@@ -54,7 +54,7 @@ class ImportCsvTests(TestCase):
         )
         csv_v2 = (
             "date,station_id,temp_c,precip_mm\n"
-            "2026-01-01,STATION_A,99,0\n"   # same key (station_id,date) but changed temp
+            "2026-01-01,STATION_A,55,0\n"   # same key (station_id,date) but changed temp
             "2026-01-02,STATION_A,11,123\n" # same key but changed precip
         )
 
@@ -75,7 +75,7 @@ class ImportCsvTests(TestCase):
         )
 
         self.assertEqual(str(rows[0]["date"]), "2026-01-01")
-        self.assertEqual(float(rows[0]["temp_c"]), 99.0)
+        self.assertEqual(float(rows[0]["temp_c"]), 55.0)
         self.assertEqual(float(rows[0]["precip_mm"]), 0.0)
 
         self.assertEqual(str(rows[1]["date"]), "2026-01-02")
