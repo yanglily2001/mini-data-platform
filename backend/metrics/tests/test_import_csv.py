@@ -86,3 +86,98 @@ class ImportCsvTests(TestCase):
         resp = self.client.post("/api/import/", data={})
         self.assertEqual(resp.status_code, 400)
         self.assertIn("error", resp.json())
+
+def test_import_same_file_twice_is_idempotent(self):
+    csv_text = (
+        "date,station_id,temp_c,precip_mm\n"
+        "2026-01-01,STATION_A,10,0\n"
+        "2026-01-02,STATION_A,11,1\n"
+    )
+
+    r1 = self._post_csv(csv_text)
+    self.assertEqual(r1.status_code, 200)
+    self.assertEqual(Measurement.objects.count(), 2)
+
+    r2 = self._post_csv(csv_text)
+    self.assertEqual(r2.status_code, 200)
+
+    # Still 2 rows total (no duplicates)
+    self.assertEqual(Measurement.objects.count(), 2)
+
+    rows = list(
+        Measurement.objects.filter(station_id="STATION_A")
+        .order_by("date")
+        .values("date", "temp_c", "precip_mm")
+    )
+    self.assertEqual(str(rows[0]["date"]), "2026-01-01")
+    self.assertEqual(float(rows[0]["temp_c"]), 10.0)
+    self.assertEqual(float(rows[0]["precip_mm"]), 0.0)
+
+def test_quality_endpoint_returns_expected_structure(self):
+    csv_text = (
+        "date,station_id,temp_c,precip_mm\n"
+        "2026-01-01,STATION_A,10,0\n"
+        "bad-date,STATION_A,10,0\n"
+        "2026-01-02,,10,0\n"
+        "2026-01-03,STATION_A,999,0\n"
+        "2026-01-04,STATION_A,10,9999\n"
+    )
+    self._post_csv(csv_text)
+
+    # quality on measurements (only valid rows should be present there)
+    resp = self.client.get("/api/quality/?table=measurements")
+    self.assertEqual(resp.status_code, 200)
+    data = resp.json()
+
+    # Key presence checks 
+    self.assertIn("table", data)
+    self.assertIn("total_rows", data)
+    self.assertIn("null_counts", data)
+    self.assertIn("null_rates", data)
+    self.assertIn("duplicates", data)
+    self.assertIn("min_max", data)
+    self.assertIn("out_of_range_counts", data)
+
+    self.assertEqual(data["table"], "measurements")
+    self.assertEqual(data["total_rows"], 1)  # only one valid row from that CSV
+
+    # Some value sanity checks 
+    self.assertEqual(data["duplicates"]["key"], ["station_id", "date"])
+    self.assertEqual(data["duplicates"]["extra_duplicate_rows"], 0)
+
+    # min/max should match the single valid row
+    self.assertEqual(float(data["min_max"]["temp_c"]["min"]), 10.0)
+    self.assertEqual(float(data["min_max"]["temp_c"]["max"]), 10.0)
+    self.assertEqual(float(data["min_max"]["precip_mm"]["min"]), 0.0)
+    self.assertEqual(float(data["min_max"]["precip_mm"]["max"]), 0.0)
+
+    def test_summary_endpoint_returns_correct_aggregates(self):
+        # Arrange: import a tiny known dataset for one station
+        csv_text = (
+            "date,station_id,temp_c,precip_mm\n"
+            "2026-01-01,STATION_A,10,1\n"
+            "2026-01-02,STATION_A,20,2\n"
+            "2026-01-03,STATION_A,30,3\n"
+            "2026-01-01,STATION_B,999,0\n"  # invalid row (temp out of range) should NOT be inserted
+        )
+        r = self._post_csv(csv_text)
+        self.assertEqual(r.status_code, 200)
+
+        # Act: call summary for STATION_A across the imported date range
+        resp = self.client.get(
+            "/api/metrics/summary/",
+            data={"station_id": "STATION_A", "from": "2026-01-01", "to": "2026-01-03"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+
+        # Assert: row count + aggregates
+        # temps: 10, 20, 30 => avg = 20
+        # precip: 1 + 2 + 3 => total = 6
+        self.assertEqual(data["station_id"], "STATION_A")
+        self.assertEqual(data["from"], "2026-01-01")
+        self.assertEqual(data["to"], "2026-01-03")
+        self.assertEqual(data["total_rows"], 3)
+
+        self.assertAlmostEqual(float(data["avg_temp_c"]), 20.0, places=6)
+        self.assertAlmostEqual(float(data["total_precip_mm"]), 6.0, places=6)
