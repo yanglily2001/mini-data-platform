@@ -41,21 +41,27 @@ It is designed as a clean, extensible foundation for structured data processing 
 
 ## Project Structure and Architecture
 
-.
-├── backend/                # Django backend (API, models, validation logic)
-│   ├── metrics/            # Core app
-│   ├── config/             # Django settings
-│   └── manage.py
+```text
+mini-data-platform/
+├── backend/
+│   ├── config/              # Django settings
+│   ├── metrics/             # Core app (models, views, tests)
+│   ├── manage.py
+│   └── requirements.txt
 │
-├── frontend/               # Vite React frontend
-│   └── src/
+├── frontend/
+│   ├── src/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   └── main.jsx
+│   └── package.json
 │
-├── data/                   # Sample CSV data
+├── data/                    # Sample CSV files
 ├── docker-compose.yml
 ├── .env.example
 ├── Makefile
 └── README.md
-
+```
 ## Technology Stack
 
 Backend
