@@ -1,6 +1,10 @@
 # Mini Data Platform
 A full-stack data platform for ingesting, validating, storing, aggregating, and visualizing structured time-series data (e.g., weather measurements).
 
+<img width="1026" height="735" alt="image" src="https://github.com/user-attachments/assets/05dc6105-69ef-4437-aab7-ae37f85317c6" />
+
+<img width="1000" height="184" alt="image" src="https://github.com/user-attachments/assets/56553cd5-61f8-45ba-abe0-85887ac4300a" />
+
 The system supports:
 
 * CSV ingestion with validation
