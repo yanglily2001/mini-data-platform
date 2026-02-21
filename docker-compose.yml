@@ -27,7 +27,7 @@ services:
       - .env
     environment:
       # Example: if your Django settings use DATABASE_URL, pass it here
-      DATABASE_URL: ${DATABASE_URL:-postgres://app:app@db:5432/app}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://app:app@db:5432/app}
       # If you use separate vars instead, keep them consistent with your settings
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
