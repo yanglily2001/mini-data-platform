@@ -74,7 +74,7 @@ def import_csv(request):
         return JsonResponse({"error": "Missing file field 'file'."}, status=400)
 
     try:
-        text = uploaded.read().decode("utf-8-sig")  # handles BOM too
+        text = uploaded.read().decode("utf-8-sig")
     except UnicodeDecodeError:
         return JsonResponse({"error": "File must be UTF-8 encoded CSV."}, status=400)
 
@@ -91,59 +91,66 @@ def import_csv(request):
 
     rows_in_file = 0
     staging_rows = []
-    valid_clean_rows = []
+    valid_rows = []
+    invalid_rows = 0
 
     for raw in reader:
         rows_in_file += 1
 
-        date = _parse_date(raw.get("date"))
+        date_val = _parse_date(raw.get("date"))
         station_id = (raw.get("station_id") or "").strip() or None
         temp_c = _parse_float(raw.get("temp_c"))
         precip_mm = _parse_float(raw.get("precip_mm"))
 
-        is_valid, _errors = _validate_row(date, station_id, temp_c, precip_mm)
+        is_valid, errors = _validate_row(date_val, station_id, temp_c, precip_mm)
 
-        # Always store row in staging (even invalid)
         staging_rows.append(
             StagingMeasurement(
-                date=date,
+                date=date_val,
                 station_id=station_id,
                 temp_c=temp_c,
                 precip_mm=precip_mm,
             )
         )
 
-        # Only valid rows go to measurements
         if is_valid:
-            valid_clean_rows.append(
+            valid_rows.append(
                 Measurement(
-                    date=date,
+                    date=date_val,
                     station_id=station_id,
                     temp_c=temp_c,
                     precip_mm=precip_mm,
                 )
             )
+        else:
+            invalid_rows += 1
 
-    rows_valid = len(valid_clean_rows)
-    rows_invalid = rows_in_file - rows_valid
+    # ✅ DEDUPE valid rows by (station_id, date) BEFORE bulk upsert
+    # If duplicates exist in the file, last one wins (common & reasonable).
+    deduped = {}
+    for m in valid_rows:
+        deduped[(m.station_id, m.date)] = m
+    valid_rows = list(deduped.values())
+
+    rows_valid = len(valid_rows_original)
+    rows_invalid = invalid_rows
 
     with transaction.atomic():
-        # Truncate staging each import (idempotent)
+        # staging contains ALL rows (even invalid)
         StagingMeasurement.objects.all().delete()
-
         if staging_rows:
             StagingMeasurement.objects.bulk_create(staging_rows, batch_size=2000)
 
         rows_upserted = 0
-        if valid_clean_rows:
+        if valid_rows:
             Measurement.objects.bulk_create(
-                valid_clean_rows,
+                valid_rows,
                 batch_size=2000,
                 update_conflicts=True,
                 unique_fields=["station_id", "date"],
                 update_fields=["temp_c", "precip_mm"],
             )
-            rows_upserted = len(valid_clean_rows)
+            rows_upserted = len(valid_rows)
 
     return JsonResponse(
         {
