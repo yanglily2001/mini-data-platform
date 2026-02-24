@@ -132,7 +132,7 @@ def import_csv(request):
         deduped[(m.station_id, m.date)] = m
     valid_rows = list(deduped.values())
 
-    rows_valid = len(valid_rows_original)
+    rows_valid = len(valid_rows)
     rows_invalid = invalid_rows
 
     with transaction.atomic():
