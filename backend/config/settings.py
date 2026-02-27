@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "metrics",
+    "rest_framework",
+    "drf_spectacular"
 ]
 
 MIDDLEWARE = [
@@ -51,6 +53,17 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+REST_FRAMEWORK = {
+    # if you already have settings here, just add the next line
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Mini Data Platform API",
+    "DESCRIPTION": "API for importing weather metrics and querying aggregates/quality checks.",
+    "VERSION": "1.0.0",
+}
 
 ROOT_URLCONF = "config.urls"
 
