@@ -1,5 +1,6 @@
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
+from datetime import date, timedelta
 
 from metrics.models import Measurement, StagingMeasurement
 
@@ -181,3 +182,32 @@ def test_quality_endpoint_returns_expected_structure(self):
 
         self.assertAlmostEqual(float(data["avg_temp_c"]), 20.0, places=6)
         self.assertAlmostEqual(float(data["total_precip_mm"]), 6.0, places=6)
+
+class DailyMetricsPaginationTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        base = date(2026, 1, 1)
+        for i in range(50):
+            Measurement.objects.create(
+                station_id="STATION_A",
+                date=base + timedelta(days=i),
+                temp_c=10.0,
+                precip_mm=1.0,
+            )
+
+    def test_daily_metrics_paginates_with_limit_offset(self):
+        r1 = self.client.get("/api/metrics/daily/?station_id=STATION_A&limit=10&offset=0")
+        self.assertEqual(r1.status_code, 200)
+        j1 = r1.json()
+        self.assertEqual(j1["count"], 50)
+        self.assertEqual(len(j1["data"]), 10)
+        self.assertEqual(j1["offset"], 0)
+        self.assertEqual(j1["limit"], 10)
+        self.assertEqual(j1["next_offset"], 10)
+
+        r2 = self.client.get("/api/metrics/daily/?station_id=STATION_A&limit=10&offset=10")
+        self.assertEqual(r2.status_code, 200)
+        j2 = r2.json()
+        self.assertEqual(j2["count"], 50)
+        self.assertEqual(len(j2["data"]), 10)
+        self.assertEqual(j2["offset"], 10)

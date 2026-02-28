@@ -15,6 +15,8 @@ TEMP_MIN_C = -60.0
 TEMP_MAX_C = 60.0
 PRECIP_MIN_MM = 0.0
 PRECIP_MAX_MM = 500.0
+DEFAULT_LIMIT = 100
+MAX_LIMIT = 1000
 
 def _parse_date(value: str):
     if value is None:
@@ -259,34 +261,52 @@ def quality_report(request):
 
 @require_GET
 def daily_metrics(request):
-    station_id = (request.GET.get("station_id") or "").strip()
+    station_id = request.GET.get("station_id")
     if not station_id:
-        return JsonResponse({"error": "Missing required query param: station_id"}, status=400)
+        return JsonResponse({"error": "station_id is required"}, status=400)
 
+    # pagination params
+    try:
+        limit = int(request.GET.get("limit", DEFAULT_LIMIT))
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        return JsonResponse({"error": "limit and offset must be integers"}, status=400)
+
+    if limit < 1:
+        return JsonResponse({"error": "limit must be >= 1"}, status=400)
+    if offset < 0:
+        return JsonResponse({"error": "offset must be >= 0"}, status=400)
+
+    limit = min(limit, MAX_LIMIT)
+
+    # build your base queryset (adjust to your real logic)
     qs = (
         Measurement.objects
         .filter(station_id=station_id)
         .order_by("date")
-        .values("date", "temp_c", "precip_mm")
+        .values("date")
+        .annotate(
+            temp_c=Avg("temp_c"),
+            precip_mm=Avg("precip_mm"),
+        )
     )
 
-    # Convert date objects to ISO strings for JSON/charting
+    total = qs.count()
+
+    page_qs = qs[offset: offset + limit]
     data = [
-        {
-            "date": row["date"].isoformat() if row["date"] else None,
-            "temp_c": row["temp_c"],
-            "precip_mm": row["precip_mm"],
-        }
-        for row in qs
+        {"date": r["date"].isoformat(), "temp_c": float(r["temp_c"]), "precip_mm": float(r["precip_mm"])}
+        for r in page_qs
     ]
 
-    return JsonResponse(
-        {
-            "station_id": station_id,
-            "count": len(data),
-            "data": data,
-        }
-    )
+    return JsonResponse({
+        "station_id": station_id,
+        "count": total,          # total matching rows (not page size)
+        "limit": limit,
+        "offset": offset,
+        "next_offset": (offset + limit) if (offset + limit) < total else None,
+        "data": data,
+    })
 
 def _parse_iso_date(value: str):
     if value is None:
