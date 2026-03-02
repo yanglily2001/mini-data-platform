@@ -3,13 +3,17 @@ import io
 from datetime import datetime
 
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
+from django.utils.dateparse import parse_date
 from django.db.models import Avg, Sum, Count
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
 
-from .models import Measurement, StagingMeasurement
+from metrics.models import Measurement, StagingMeasurement
+
+from rest_framework.views import APIView
+from .models import Metric
 
 TEMP_MIN_C = -60.0
 TEMP_MAX_C = 60.0
@@ -17,6 +21,62 @@ PRECIP_MIN_MM = 0.0
 PRECIP_MAX_MM = 500.0
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 1000
+
+class Echo:
+    """A file-like object that just returns what you write to it (for streaming)."""
+    def write(self, value):
+        return value
+
+
+@require_GET
+def download_metrics_csv(request):
+    station_id = request.GET.get("station_id")
+    from_str = request.GET.get("from")
+    to_str = request.GET.get("to")
+
+    if not station_id:
+        return JsonResponse({"error": "station_id is required"}, status=400)
+
+    from_date = parse_date(from_str) if from_str else None
+    to_date = parse_date(to_str) if to_str else None
+
+    if from_str and from_date is None:
+        return JsonResponse({"error": "from must be YYYY-MM-DD"}, status=400)
+    if to_str and to_date is None:
+        return JsonResponse({"error": "to must be YYYY-MM-DD"}, status=400)
+
+    qs = Measurement.objects.filter(station_id=station_id).order_by("date")
+
+    if from_date:
+        qs = qs.filter(date__gte=from_date)
+    if to_date:
+        qs = qs.filter(date__lte=to_date)
+
+    pseudo_buffer = Echo()
+    writer = csv.writer(pseudo_buffer)
+
+    def row_iter():
+        # header row
+        yield writer.writerow(["date", "station_id", "temp_c", "precip_mm"])
+        # data rows
+        for m in qs.iterator(chunk_size=2000):
+            yield writer.writerow([
+                m.date.isoformat(),
+                m.station_id,
+                float(m.temp_c) if m.temp_c is not None else "",
+                float(m.precip_mm) if m.precip_mm is not None else "",
+            ])
+
+    filename = f"metrics_{station_id}"
+    if from_str:
+        filename += f"_{from_str}"
+    if to_str:
+        filename += f"_{to_str}"
+    filename += ".csv"
+
+    resp = StreamingHttpResponse(row_iter(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
 
 def _parse_date(value: str):
     if value is None:

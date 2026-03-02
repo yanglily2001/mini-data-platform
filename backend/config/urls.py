@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.urls import path
 from config.views import health_check
 from metrics.views import import_csv
+from metrics.views import download_metrics_csv
 from metrics.views import quality_report
 from metrics.views import daily_metrics
 from metrics.views import daily_metrics
@@ -37,6 +38,7 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     # path("api/", include("metrics.urls")),
+    path ("api/metrics/download", download_metrics_csv, name="metrics_download_csv"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc")
 ]
 

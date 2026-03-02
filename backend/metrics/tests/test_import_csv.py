@@ -211,3 +211,32 @@ class DailyMetricsPaginationTests(TestCase):
         self.assertEqual(j2["count"], 50)
         self.assertEqual(len(j2["data"]), 10)
         self.assertEqual(j2["offset"], 10)
+
+class DownloadCsvTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        Measurement.objects.create(date=date(2026, 1, 1), station_id="STATION_A", temp_c=10, precip_mm=1)
+        Measurement.objects.create(date=date(2026, 1, 2), station_id="STATION_A", temp_c=11, precip_mm=2)
+        Measurement.objects.create(date=date(2026, 1, 1), station_id="STATION_B", temp_c=99, precip_mm=99)
+
+    def test_download_csv_filters_by_station(self):
+        resp = self.client.get("/api/metrics/download/?station_id=STATION_A")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"].split(";")[0], "text/csv")
+
+        body = b"".join(resp.streaming_content).decode("utf-8")
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+
+        # header + 2 rows
+        self.assertEqual(lines[0], "date,station_id,temp_c,precip_mm")
+        self.assertEqual(len(lines), 3)
+        self.assertTrue(all(",STATION_A," in line or line.startswith("date,") for line in lines))
+
+    def test_download_csv_date_range(self):
+        resp = self.client.get("/api/metrics/download/?station_id=STATION_A&from=2026-01-02&to=2026-01-02")
+        self.assertEqual(resp.status_code, 200)
+
+        body = b"".join(resp.streaming_content).decode("utf-8")
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+        self.assertEqual(len(lines), 2)  # header + 1 row
+        self.assertTrue(lines[1].startswith("2026-01-02,STATION_A,"))
