@@ -1,9 +1,9 @@
 import csv
 import io
-from datetime import datetime
+from datetime import date as date_type
 
 from django.db import transaction
-from django.http import JsonResponse, StreamingHttpResponse
+from django.http import JsonResponse, StreamingHttpResponse, HttpResponseBadRequest
 from django.utils.dateparse import parse_date
 from django.db.models import Avg, Sum, Count
 from django.views.decorators.csrf import csrf_exempt
@@ -13,7 +13,6 @@ from django.views.decorators.http import require_GET
 from metrics.models import Measurement, StagingMeasurement
 
 from rest_framework.views import APIView
-from .models import Metric
 
 TEMP_MIN_C = -60.0
 TEMP_MAX_C = 60.0
@@ -27,52 +26,45 @@ class Echo:
     def write(self, value):
         return value
 
-
-@require_GET
 def download_metrics_csv(request):
     station_id = request.GET.get("station_id")
-    from_str = request.GET.get("from")
-    to_str = request.GET.get("to")
+    date_from = request.GET.get("from")
+    date_to = request.GET.get("to")
 
-    if not station_id:
-        return JsonResponse({"error": "station_id is required"}, status=400)
+    qs = Measurement.objects.all().order_by("date", "station_id")
 
-    from_date = parse_date(from_str) if from_str else None
-    to_date = parse_date(to_str) if to_str else None
+    if station_id:
+        qs = qs.filter(station_id=station_id)
 
-    if from_str and from_date is None:
-        return JsonResponse({"error": "from must be YYYY-MM-DD"}, status=400)
-    if to_str and to_date is None:
-        return JsonResponse({"error": "to must be YYYY-MM-DD"}, status=400)
+    if date_from:
+        d1 = parse_date(date_from)
+        if not d1:
+            return HttpResponseBadRequest('{"error":"invalid from date"}', content_type="application/json")
+        qs = qs.filter(date__gte=d1)
 
-    qs = Measurement.objects.filter(station_id=station_id).order_by("date")
+    if date_to:
+        d2 = parse_date(date_to)
+        if not d2:
+            return HttpResponseBadRequest('{"error":"invalid to date"}', content_type="application/json")
+        qs = qs.filter(date__lte=d2)
 
-    if from_date:
-        qs = qs.filter(date__gte=from_date)
-    if to_date:
-        qs = qs.filter(date__lte=to_date)
-
+    # Stream rows to avoid loading everything in memory
     pseudo_buffer = Echo()
     writer = csv.writer(pseudo_buffer)
 
     def row_iter():
-        # header row
         yield writer.writerow(["date", "station_id", "temp_c", "precip_mm"])
-        # data rows
         for m in qs.iterator(chunk_size=2000):
-            yield writer.writerow([
-                m.date.isoformat(),
-                m.station_id,
-                float(m.temp_c) if m.temp_c is not None else "",
-                float(m.precip_mm) if m.precip_mm is not None else "",
-            ])
+            yield writer.writerow([m.date.isoformat(), m.station_id, m.temp_c, m.precip_mm])
 
-    filename = f"metrics_{station_id}"
-    if from_str:
-        filename += f"_{from_str}"
-    if to_str:
-        filename += f"_{to_str}"
-    filename += ".csv"
+    filename_parts = ["metrics"]
+    if station_id:
+        filename_parts.append(station_id)
+    if date_from:
+        filename_parts.append(f"from_{date_from}")
+    if date_to:
+        filename_parts.append(f"to_{date_to}")
+    filename = "_".join(filename_parts) + ".csv"
 
     resp = StreamingHttpResponse(row_iter(), content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -88,7 +80,6 @@ def _parse_date(value: str):
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
-
 
 def _parse_float(value: str):
     if value is None:
