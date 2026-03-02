@@ -26,7 +26,7 @@ class Echo:
     def write(self, value):
         return value
 
-def download_metrics_csv(request):
+def metrics_download_csv(request):
     station_id = request.GET.get("station_id")
     date_from = request.GET.get("from")
     date_to = request.GET.get("to")
