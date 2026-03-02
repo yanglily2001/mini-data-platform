@@ -1,6 +1,7 @@
 import csv
 import io
 from datetime import date as date_type
+from typing import Optional
 
 from django.db import transaction
 from django.http import JsonResponse, StreamingHttpResponse, HttpResponseBadRequest
@@ -70,16 +71,13 @@ def metrics_download_csv(request):
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
-def _parse_date(value: str):
-    if value is None:
-        return None
-    value = value.strip()
-    if not value:
+def _parse_date(param: Optional[str], name: str) -> Optional[date]:
+    if not param:
         return None
     try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
+        return date.fromisoformat(param)
     except ValueError:
-        return None
+        raise ValueError(f"{name} must be YYYY-MM-DD")
 
 def _parse_float(value: str):
     if value is None:

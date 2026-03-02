@@ -32,7 +32,7 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     # path("api/", include("metrics.urls")),
-    path ("api/metrics/download", metrics_download_csv, name="metrics_download_csv"),
+    path ("api/metrics/download/", metrics_download_csv, name="metrics_download_csv"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc")
 ]
 
