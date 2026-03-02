@@ -1,6 +1,7 @@
 import csv
 import io
 from datetime import date as date_type
+from datetime import datetime
 from typing import Optional
 
 from django.db import transaction
@@ -27,6 +28,7 @@ class Echo:
     def write(self, value):
         return value
 
+@require_GET
 def metrics_download_csv(request):
     station_id = request.GET.get("station_id")
     date_from = request.GET.get("from")
@@ -70,14 +72,6 @@ def metrics_download_csv(request):
     resp = StreamingHttpResponse(row_iter(), content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
-
-def _parse_date(param: Optional[str], name: str) -> Optional[date]:
-    if not param:
-        return None
-    try:
-        return date.fromisoformat(param)
-    except ValueError:
-        raise ValueError(f"{name} must be YYYY-MM-DD")
 
 def _parse_float(value: str):
     if value is None:
@@ -148,7 +142,7 @@ def import_csv(request):
     for raw in reader:
         rows_in_file += 1
 
-        date_val = _parse_date(raw.get("date"))
+        date_val = parse_date(raw.get("date") or "")
         station_id = (raw.get("station_id") or "").strip() or None
         temp_c = _parse_float(raw.get("temp_c"))
         precip_mm = _parse_float(raw.get("precip_mm"))
